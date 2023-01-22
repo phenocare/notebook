@@ -1,0 +1,38 @@
+---
+title: "ANPC analysis - about??"
+author: "Your Name"
+date: "The Date"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+    theme: lumen
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(knitr)
+library(htmlTable)
+library(dplyr)
+library(readxl)
+library(data.table)
+library(fusion)
+
+set.seed(5474)
+```
+
+```{r}
+pathToDaE <- Sys.getenv()["DATA"]
+dir(pathToDaE)
+
+pathToFile <- "X.daE"
+
+da <- local(get(load(file.path(pathToDaE, 
+                               pathToFile))))
+```
+
