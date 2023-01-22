@@ -1,0 +1,4 @@
+name: makeSamples
+description: >
+   prepare a sample description list for rolodex-samples
+create_dir: FALSE
