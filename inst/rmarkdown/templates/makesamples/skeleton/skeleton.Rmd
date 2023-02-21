@@ -147,7 +147,7 @@ manifest %>% select(sampleID,
 
 # checking a few things
 ```{r}
-checkSamples(manifest)
+checkSamples(sampleDescriptionList)
 ```
 
 # storing the list in the repo (legacy)
