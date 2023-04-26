@@ -23,8 +23,8 @@ library(dplyr)
 library(readxl)
 library(data.table)
 
-devtools::load_all("/Users/jul/git/jwist/fusion")
-devtools::load_all("/Users/jul/gitea/phenocare/rolodex-samples")
+devtools::load_all(Sys.getenv("FUSION"))
+devtools::load_all(Sys.getenv("ROLODEX"))
 set.seed(5474)
 ```
 
