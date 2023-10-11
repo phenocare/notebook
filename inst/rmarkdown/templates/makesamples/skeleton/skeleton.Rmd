@@ -94,9 +94,7 @@ manifest$tubeLabel <- cleanNames(manifest$tubeLabel)
 # IN ORDER TO UNIQUELY MATCH A SAMPLE TO ITS METADATA THE CONCATENATION OF
 # SOURCEID - SAMPLETIMEPOINT - SAMPLEALIQUOTS MUST BE UNIQUE.
 manifest$sourceID <- cleanNames(manifest$initials)
-manifest$sampleTimePoint <- cleanNames(paste0(manifest$sampleTimePoint, 
-                                   "_",
-                                   manifest$sessionType))
+manifest$sampleTimePoint <- cleanNames(manifest$sampleTimePoint)
 manifest$sampleAliquots <- manifest$sampleAliquots
 
 # Provide information about the boxes
@@ -121,6 +119,20 @@ manifest$comments <- manifest$comment
 
 # DON'T ALTER THIS LINE (COMPATIBILITY WITH OLDER FORMATS)
 manifest$UUID <- paste0(manifest$sampleID, "_", manifest$sourceID)
+```
+
+# check for duplicated
+```{r}
+fi <- duplicated(paste0(manifest$sourceID, manifest$sampleTimePoint, manifest$sampleAliquots))
+table(fi)
+```
+
+# add complementary information into the comment column 
+```{r}
+# # use this for external projects only
+# for (i in 1:nrow(manifest)) {
+#   manifest$comments[i] <- toJSON(manifestOriginal[i,], unbox = TRUE)
+# }
 ```
 
 # creation of the sample description list
