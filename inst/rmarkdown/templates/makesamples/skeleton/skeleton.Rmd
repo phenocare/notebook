@@ -22,10 +22,12 @@ library(htmlTable)
 library(dplyr)
 library(readxl)
 library(data.table)
+library(jsonlite)
 
 devtools::load_all(Sys.getenv("FUSION"))
 devtools::load_all(Sys.getenv("ROLODEX"))
 set.seed(5474)
+options("max.print" = 10000)
 ```
 
 # project identification
@@ -53,7 +55,7 @@ cohortName <- input(con,
 ```{r}
 # Get file with manifest. If using xlsx files, make sure that the information
 # is on the first sheet
-manifest <- inputFile()
+manifest <- as.data.table(inputFile())
 N <- nrow(manifest)
 ```
 
@@ -93,7 +95,7 @@ manifest$tubeLabel <- cleanNames(manifest$tubeLabel)
 # experimental design.
 # IN ORDER TO UNIQUELY MATCH A SAMPLE TO ITS METADATA THE CONCATENATION OF
 # SOURCEID - SAMPLETIMEPOINT - SAMPLEALIQUOTS MUST BE UNIQUE.
-manifest$sourceID <- cleanNames(manifest$initials)
+manifest$sourceID <- cleanNames(manifest$sourceName)
 manifest$sampleTimePoint <- cleanNames(manifest$sampleTimePoint)
 manifest$sampleAliquots <- manifest$sampleAliquots
 
@@ -104,8 +106,8 @@ manifest$sampleAliquots <- manifest$sampleAliquots
 # 9x9 (Lettered)
 # 10x10 (Lettered) 
 # as boxTypes.
-manifest$boxName <- rep("box1", N)
-manifest$boxType <- rep("10x10", N) 
+manifest$boxName <- rep("box1", N) #rep(NA, N)
+manifest$boxType <- rep("10x10", N) #rep(NA, N)
 
 # the position MUST be lettered. If boxes uses numeric position, then the 
 # position must be converted.
