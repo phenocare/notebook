@@ -1,0 +1,221 @@
+---
+title: "project - cohort - sampleMatrixType - comment"
+author: "Your Name"
+date: "The Date"
+output: 
+  html_document:
+    css: ../makeConfig.css
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+    theme: lumen
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(knitr)
+library(htmlTable)
+library(dplyr)
+
+library(fusion)
+    ## If you do not have fusion run below
+# remotes::install_github("phenological/nmr-parser")
+# remotes::install_github("jwist/fusion")
+library(mva.plots)
+    ## If you do not have mva.plot run below
+# remotes::install_github("phenological/mva-plots")
+library(nmr.spectra.processing)
+    ## If you do not have nmr.spectra.processing run below
+# remotes::install_github("phenological/nmr-spectra-processing")
+
+```
+
+# Load spectra daE
+
+## Step 1: set the file.path
+
+```{r}
+# If you have your data stored in the OneDrive ANPC dataset folder then use below by replacing projectName and cohortName to appropriate names
+pathToDaE<-file.path(Sys.getenv("DATASETS"),"projectName","cohortName","DataElements")
+  # Or you can navigate yourself to the folder where you store daE file
+pathToDaE<-"~/Dataset/ProjectName/cohortName/DataElements/"
+```
+
+## Step 2: load the daE
+
+```{r}
+### Lets say your Urine NMR spectra daE is called "Urine1DSpectra.daE" then
+da<-local(get(load(file.path(pathToDaE,"Urine1DSpectra.daE"))))
+
+```
+
+## Step 3: extract information from the daE
+
+[da\@varName](mailto:da@varName){.email}: column name of the da\@.Data
+(ppm in this daE)
+
+da\@.Data: spectra data
+
+[da\@obsDescr](mailto:da@obsDescr){.email}: A list of specta information
+
+-   info: You should find the dataPath, sampleID, sampleType and more
+
+-   proc: (SF: spectra frequency. PHC0: zero-order phase. PHC1: 1st
+    order phase. SR: Spectra Reference)
+
+-   params: all the acqus information
+
+-   test_tests_comment: QC report results
+
+-   test_tests_value: QC report in details
+
+-   test_infos_value: QC experiment performance results
+
+```{r}
+
+X<-da@.Data # spectra
+ppm<-as.numeric(da@varName) 
+Anno<-da@obsDescr$info
+
+# if you put ppm to the column name of X, also sampleID to the row names would help you with plotting (viewing) later on
+rownames(X)<-Anno$sampleID
+colnames(X)<-ppm
+
+```
+
+# Post processing
+
+## Step 1: calibrate spectra to alanine
+
+### check the alanine spectra region (1.45 \~ 1.52 ppm) by plotting the regions using matspec()
+
+<https://github.com/phenological/mva-plots/blob/main/R/matspec.R>
+
+```{r}
+matspec(X,ppm,roi = c(1.45,1.52),interactive = F)
+```
+
+### Calibrate to Alanine doublet using calibrateSpectra()
+
+<https://github.com/phenological/nmr-spectra-processing/blob/main/R/calibrateSpectra.R>
+
+```{r}
+X_cal<-calibrateSpectra(ppm = ppm,Y = X,ref = c("alanine"),maxShift = 1.5,rOref = c(1.45,1.53),cshift = 1.48)
+colnames(X_cal)<-ppm
+
+matspec(X_cal,ppm,roi = c(1.45,1.52),interactive = F)
+
+```
+
+## Step 2: remove selected region of the spectra
+
+```{r}
+
+idx<-c(which(ppm<=0.5),which(ppm>=4.7 & ppm<=5.0),which(ppm>=9.5))
+
+X<-X_cal[,-idx]
+ppm<-ppm[-idx]
+
+rm(idx,X_cal)
+```
+
+## Step 3: Apply baseline correction using baselineCorrection()
+
+<https://github.com/phenological/nmr-spectra-processing/blob/main/R/baselineCorrection.R>
+
+```{r}
+X<-baselineCorrection(X)
+```
+
+## Step 4: Apply PQN normalization using normalize()
+
+```{r}
+X<-normalize(X)
+```
+
+### plot some spectra
+
+Some region may looked aligned but in Urine, even after alignment to
+alanine, you will find many miss aligned regions
+
+```{r}
+colnames(X)<-ppm
+matspec(X,ppm,roi = c(5.2,5.3),interactive = F)
+matspec(X,ppm,roi = c(7.0,7.5),interactive = F)
+
+```
+
+# Spectra check with PCA
+
+You should see the "ltr" to be cluster tightly.
+
+If not, look at the spectra and find out why (could it be failed water
+suppression?)
+
+You can also check if there are any outliers. Find out which spectra it
+is, plot some spectra to find the reason why.
+
+```{r}
+mod<-PCA(X,rank = 2)
+Anno$sampleType<-ifelse(grepl("COV",Anno$sampleID),"sample","ltr")
+
+plotScores(mod,optns = list(color = Anno$sampleType))
+
+PlotLoadSpec(mod,PC= 1,roi = c(0.5,4.5))
+PlotLoadSpec(mod,PC= 1,roi = c(5.0,9.5))
+
+```
+
+# Remove LTRs, Outliers and Original run that has re-runs
+
+If the LTRs are in tight cluster then we can remove them
+
+Outliers: select those that should be excluded (e.g., experimental
+errors)
+
+Original runs of re-runs : when there is a re-runs it must be a reason..
+you can check by plotting them to compare. In general, we want to keep
+the last runs instead of the original runs.
+
+You can find which one is reruns by looking at the sampleID. Those with
+rerun should have "\#" or "." after the sampleID followed by the re-run
+number. (e.g., COV00001#1)
+
+Also noted that apart from Busselton project, all the sampleID should
+have unique 3 capital letters given to each project at the beginning
+followed by 5 digit numbers (total of 8 characters)
+
+# Re-run Post Processing Step 1 to 4 without those LTR etc.,
+
+
+# STOCSY
+https://github.com/phenological/mva-plots/blob/main/R/stocsy.R
+
+## Alanine (example)
+d(1.48) 
+q(3.78) signal intensity may be too low to see this compared to glucose peaks that are also overlap 
+```{r}
+d = 1.473# Driver peak in ppm
+stocsy(x = ppm,Y = X,driver = d)
+stocsy(x = ppm,Y = X,driver = d,roi = c(1.45,1.49))
+# stocsy(x = ppm,Y = X,driver = d,roi = c(3.7,3.8))
+
+```
+
+## Glucose (example)
+https://hmdb.ca/spectra/nmr_one_d/4817
+```{r}
+matspec(X[1:5,],ppm,roi = c(5.2,5.3))
+d = 5.236# Driver peak in ppm
+stocsy(x = ppm,Y = X,driver = d)
+stocsy(x = ppm,Y = X,driver = d,roi = c(5.2,5.3))
+stocsy(x = ppm,Y = X,driver = d,roi = c(4.6,4.7))
+stocsy(x = ppm,Y = X,driver = d,roi = c(3.2,3.95))
+
+```
