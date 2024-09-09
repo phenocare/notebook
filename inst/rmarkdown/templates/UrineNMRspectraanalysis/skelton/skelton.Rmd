@@ -25,8 +25,11 @@ library(dplyr)
 
 library(fusion)
     ## If you do not have fusion run below
-# remotes::install_github("phenological/nmr-parser")
+# remotes::install_url("https://takecare.mylims.org/gitea/jul/rldx/archive/main.tar.gz")
+# remotes::install_github("phenological/nmr-parser@0.1.9")
 # remotes::install_github("jwist/fusion")
+    # @@ Or see https://github.com/phenological/fusion
+
 library(mva.plots)
     ## If you do not have mva.plot run below
 # remotes::install_github("phenological/mva-plots")
