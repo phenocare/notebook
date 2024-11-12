@@ -1,5 +1,5 @@
 ---
-title: "project - cohort - sampleMatrixType - comment"
+title: "project - cohort - sampleMatrixType - comment - v0.2.0"
 author: "Your Name"
 date: "The Date"
 output: 
@@ -57,6 +57,8 @@ cohortName <- input(con,
 # is on the first sheet
 manifest <- as.data.table(inputFile())
 N <- nrow(manifest)
+print(N)
+setDT(manifest)
 ```
 
 ```{r}
@@ -125,9 +127,23 @@ manifest$UUID <- paste0(manifest$sampleID, "_", manifest$sourceID)
 
 # check for duplicated
 ```{r}
-fi <- duplicated(paste0(manifest$sourceID, manifest$sampleTimePoint, manifest$sampleAliquots))
+uniquetxt <- paste0(manifest$sourceID, 
+                    manifest$sampleTimePoint, 
+                    manifest$sampleAliquots)
+fi <- duplicated(uniquetxt)
 table(fi)
+setorder(manifest, cols = "tubeLabel")
+manifest[dduplicated(uniquetxt),,]
 ```
+
+#we label dups as dups (should only be used in exceptional cases)
+```{r}
+# manifest$tubeLabel <- makeUnique(manifest$tubeLabel, first = 2)
+# uniquetxt <- paste0(manifest$sourceID, manifest$sampleTimePoint, manifest$sampleAliquots)
+# fi <- duplicated(uniquetxt)
+# manifest$sampleAliquots[fi] <- paste0(manifest$sampleAliquots[fi], ".d")
+```
+
 
 # add complementary information into the comment column 
 ```{r}
