@@ -127,9 +127,11 @@ manifest$UUID <- paste0(manifest$sampleID, "_", manifest$sourceID)
 
 # check for duplicated
 ```{r}
-uniquetxt <- paste0(manifest$sourceID, 
+uniquetxt <- paste0(manifest$sourceName, 
                     manifest$sampleTimePoint, 
-                    manifest$sampleAliquots)
+                    manifest$sampleAliquots,
+                    manifest$sampleMatrixType,
+                    collapse = "-")
 fi <- duplicated(uniquetxt)
 table(fi)
 setorder(manifest, cols = "tubeLabel")
