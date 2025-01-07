@@ -62,6 +62,18 @@ setDT(manifest)
 ```
 
 ```{r}
+# if aliquots represent the number and not the label, we can expand the manifest to give each tube (aliquots) a proper uuid
+manifest <- manifest[rep(seq_len(.N), sampleAliquots)]
+
+# this create a column aliquots that becomes the new sampleAliquots
+# REMEMBER TO CHANGE THE CODE BELOW TO USE aliquots INSTEAD OF sampleAliquots
+manifest[, aliquots := sequence(sampleAliquots), by = .(tubeLabel, sampleAliquots)]
+
+N <- nrow(manifest)
+print(N)
+```
+
+```{r}
 # creating sampleIDs
 sampleID <- getLastSampleID(projectName, length.out = N, offset = 0)$nextID
 ```
