@@ -4,12 +4,12 @@
 \name{notebook-package}
 \alias{notebook}
 \alias{notebook-package}
-\title{notebook: What the Package Does (One Line, Title Case)}
+\title{notebook: Notebook templates for ANPC analysis and sample preparation}
 \description{
-What the package does (one paragraph).
+Provides templates for notebook for analysis at the Australian National Phenome Centre
 }
 \author{
-\strong{Maintainer}: First Last \email{first.last@example.com} (\href{https://orcid.org/YOUR-ORCID-ID}{ORCID})
+\strong{Maintainer}: Julien Wist \email{julien.wist@murdoch.edu.au} (\href{https://orcid.org/0000-0002-3416-2572}{ORCID})
 
 }
 \keyword{internal}
