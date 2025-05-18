@@ -1,6 +1,6 @@
 Package: notebook
 Title: Notebook templates for ANPC analysis and sample preparation
-Version: 0.2.1
+Version: 0.2.2
 Authors@R: 
     person("Julien", "Wist", , "julien.wist@murdoch.edu.au", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-3416-2572"))

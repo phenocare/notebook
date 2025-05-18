@@ -59,18 +59,19 @@ manifest <- as.data.table(inputFile())
 N <- nrow(manifest)
 print(N)
 setDT(manifest)
+manifestOriginal <- manifest # save for later if necessary for comments
 ```
 
 ```{r}
 # if aliquots represent the number and not the label, we can expand the manifest to give each tube (aliquots) a proper uuid
-manifest <- manifest[rep(seq_len(.N), sampleAliquots)]
+# manifest <- manifest[rep(seq_len(.N), sampleAliquots)]
 
 # this create a column aliquots that becomes the new sampleAliquots
 # REMEMBER TO CHANGE THE CODE BELOW TO USE aliquots INSTEAD OF sampleAliquots
-manifest[, aliquots := sequence(sampleAliquots), by = .(tubeLabel, sampleAliquots)]
+# manifest[, aliquots := sequence(sampleAliquots), by = .(tubeLabel, sampleAliquots)]
 
-N <- nrow(manifest)
-print(N)
+# N <- nrow(manifest)
+# print(N)
 ```
 
 ```{r}
@@ -148,6 +149,8 @@ fi <- duplicated(uniquetxt)
 table(fi)
 setorder(manifest, cols = "tubeLabel")
 manifest[dduplicated(uniquetxt),,]
+
+checkPositions(manifest$tubePosition)
 ```
 
 #we label dups as dups (should only be used in exceptional cases)
@@ -162,8 +165,46 @@ manifest[dduplicated(uniquetxt),,]
 # add complementary information into the comment column 
 ```{r}
 # # use this for external projects only
+# 
+# # Create a list of columns to exclude (all columns not in your select list)
+# cols_to_drop <- c("sampleID", "projectName", "cohortName", "receptionDate", 
+#                  "sampleMatrixType", "sampleVolume", "tubeLabel", "sourceID", 
+#                  "sampleTimePoint", "sampleAliquots", "boxName", "boxType", 
+#                  "tubePosition", "tubeRow", "tubeCol", "collectionTube", 
+#                  "comments", "UUID")
+# 
+# # Get all column names
+# all_cols <- names(manifestOriginal)
+# 
+# # Identify columns to drop
+# cols_to_drop <- intersect(all_cols, cols_to_keep)
+# 
+# # Create a copy of the data.table for metaComments
+# metaComments <- copy(manifestOriginal)
+# 
+# # Drop the columns by reference
+# metaComments[, (cols_to_drop) := NULL]
+# 
+# # Simple function to clean SQLite/JSON problematic characters
+# clean_sqlite_chars <- function(x) {
+#   if (is.character(x)) {
+#     # Use iconv to handle control characters including NULL bytes
+#     x <- iconv(x, "UTF-8", "UTF-8", sub="")
+#     
+#     # Escape single quotes for SQLite
+#     x <- gsub("'", "''", x, fixed = TRUE)
+#   }
+#   return(x)
+# }
+# 
+# # Apply the cleaning function to all character columns
+# char_cols <- names(metaComments)[sapply(metaComments, is.character)]
+# for (col in char_cols) {
+#   set(metaComments, j = col, value = clean_sqlite_chars(metaComments[[col]]))
+# }
+# 
 # for (i in 1:nrow(manifest)) {
-#   manifest$comments[i] <- toJSON(manifestOriginal[i,], unbox = TRUE)
+#   manifest$comments[i] <- toJSON(metaComments[i,], unbox = TRUE)
 # }
 ```
 
