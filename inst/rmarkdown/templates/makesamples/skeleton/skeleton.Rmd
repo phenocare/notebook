@@ -240,7 +240,7 @@ checkSamples(sampleDescriptionList)
 # we still write a sample description list file for legacy purpose
 # we add ignore so it is not imported
 # DON'T ALTER THE NAME OF THE FILE
-txt = "" # if you really need to identify multiple lists, please use this.
+txt = manifest$sampleMatrixType[1] # if you really need to identify multiple lists, please use this.
 
 write.table(sampleDescriptionList, 
             file = paste0("sampleDescriptionList", cleanNames(txt), ".ignore.tsv"), sep = "\t", dec = ".", row.names = FALSE)

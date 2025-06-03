@@ -1,0 +1,231 @@
+---
+title: "external - cohortName - sampleMatrixType - comment - v0.2.0"
+author: "Your Name"
+date: "The Date"
+output: 
+  html_document:
+    css: ../makeConfig.css
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+    theme: lumen
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(knitr)
+library(htmlTable)
+library(dplyr)
+library(readxl)
+library(data.table)
+library(jsonlite)
+
+devtools::load_all(Sys.getenv("FUSION"))
+devtools::load_all(Sys.getenv("ROLODEX"))
+set.seed(5474)
+options("max.print" = 10000)
+```
+
+# project identification
+```{r}
+# Get the name of the project from the database
+con <- openDb()
+project <- input(con, what = "project")
+# should be 34
+```
+
+```{r}
+# Set project and prefix
+projectName <- project$name
+projectID <- project$projectID
+prefix <- rolProject(projectName)$prefix
+```
+
+```{r}
+# Get the name of the cohort name from the database
+cohortName <- input(con,
+                    what = "cohort",
+                    options = list("projectID" = projectID))$cohortName
+```
+
+
+```{r}
+# select the dataPath pattern 
+manifest <- rldx::rldx_get(service = Sys.getenv("ROLDX_URL"),
+               route = "searchDataPath",
+               request = "?pattern=AYGUL_STOOL_POLAR")
+manifest <- manifest$content$ids
+setDT(manifest)
+
+# manifest <- manifest[grep("STOOL",dataPath),,]
+
+# rldx::rldx_get(service = Sys.getenv("ROLDX_URL"),
+#                route = "lastSampleName",
+#                request = "")
+```
+
+
+```{r}
+N <- nrow(manifest)
+print(N)
+
+manifestOriginal <- manifest # save for later if necessary for comments
+```
+
+
+```{r}
+# creating sampleIDs
+sampleID <- getLastSampleID(projectName, length.out = N, offset = 0)$nextID
+```
+
+# matching and checking
+```{r} 
+
+manifest$sampleID <- sampleID
+manifest$projectName <- rep(projectName, N)
+manifest$cohortName <- rep(cohortName, N)
+
+# creating date for today (comment after use)
+today <- format(Sys.time(), "%d-%m-%Y")
+manifest$receptionDate <- rep(today, N)
+
+# sampleMatrixTypes are predefined. Use getMatrices() to obtain a list of
+# valid types. Most common are PLA, SER and URI
+manifest$sampleMatrixType <- rep("FAE", N)
+
+# sample volume must be in microliter without unit (eg. 500)
+manifest$sampleVolume <- rep(NA, N)
+
+# tubeLabel MUST correspond to the labels actually on the tube so that 
+# locating samples is possible
+manifest$tubeLabel <- paste0(manifest$sampleID, "-", manifest$expno)
+
+manifest$sourceID <- paste0("UKN", seq(1, N))
+manifest$sampleTimePoint <- rep(1, N)
+manifest$sampleAliquots <- rep(1, N)
+
+manifest$boxName <- rep(NA, N)
+manifest$boxType <- rep(NA, N)
+manifest$tubePosition <- rep(NA, N) 
+manifest$tubeRow <- rep(NA, N) 
+manifest$tubeCol <- rep(NA, N) 
+
+# additional information
+manifest$collectionTube <- rep(NA, N)
+manifest$comments <- rep(NA, N)
+
+# DON'T ALTER THIS LINE (COMPATIBILITY WITH OLDER FORMATS)
+manifest$UUID <- paste0(manifest$sampleID, "_", manifest$sourceID)
+```
+
+# check for duplicated
+```{r}
+uniquetxt <- paste0(manifest$sourceName, 
+                    manifest$sampleTimePoint, 
+                    manifest$sampleAliquots,
+                    manifest$sampleMatrixType,
+                    collapse = "-")
+fi <- duplicated(uniquetxt)
+table(fi)
+setorder(manifest, cols = "tubeLabel")
+manifest[dduplicated(uniquetxt),,]
+```
+
+# add complementary information into the comment column 
+```{r}
+# use this for external projects only
+
+# Create a list of columns to exclude (all columns not in your select list)
+cols_to_drop <- c("sampleID", "projectName", "cohortName", "receptionDate",
+                 "sampleMatrixType", "sampleVolume", "tubeLabel", "sourceID",
+                 "sampleTimePoint", "sampleAliquots", "boxName", "boxType",
+                 "tubePosition", "tubeRow", "tubeCol", "collectionTube",
+                 "comments", "UUID")
+
+# Get all column names
+all_cols <- names(manifestOriginal)
+
+# Identify columns to drop
+cols_to_drop <- intersect(all_cols, cols_to_drop)
+
+# Create a copy of the data.table for metaComments
+metaComments <- copy(manifestOriginal)
+
+# Drop the columns by reference
+metaComments[, (cols_to_drop) := NULL]
+
+# Simple function to clean SQLite/JSON problematic characters
+clean_sqlite_chars <- function(x) {
+  if (is.character(x)) {
+    # Use iconv to handle control characters including NULL bytes
+    x <- iconv(x, "UTF-8", "UTF-8", sub="")
+
+    # Escape single quotes for SQLite
+    x <- gsub("'", "''", x, fixed = TRUE)
+  }
+  return(x)
+}
+
+# Apply the cleaning function to all character columns
+char_cols <- names(metaComments)[sapply(metaComments, is.character)]
+for (col in char_cols) {
+  set(metaComments, j = col, value = clean_sqlite_chars(metaComments[[col]]))
+}
+
+for (i in 1:nrow(manifest)) {
+  manifest$comments[i] <- toJSON(metaComments[i,], unbox = TRUE)
+}
+```
+
+# creation of the sample description list
+```{r}
+manifest %>% select(sampleID,
+                    projectName,
+                    cohortName,
+                    receptionDate,
+                    sampleMatrixType,
+                    sampleVolume,
+                    tubeLabel,
+                    sourceID,
+                    sampleTimePoint,
+                    sampleAliquots,
+                    boxName,
+                    boxType,
+                    tubePosition,
+                    tubeRow,
+                    tubeCol,
+                    collectionTube,
+                    comments,
+                    UUID) -> sampleDescriptionList
+```
+
+# checking a few things
+```{r}
+checkSamples(sampleDescriptionList)
+```
+
+# storing the list in the repo (legacy)
+```{r}
+# we still write a sample description list file for legacy purpose
+# we add ignore so it is not imported
+# DON'T ALTER THE NAME OF THE FILE
+txt = manifest$sampleMatrixType[1] # if you really need to identify multiple lists, please use this.
+
+write.table(sampleDescriptionList, 
+            file = paste0("sampleDescriptionList", cleanNames(txt), ".ignore.tsv"), sep = "\t", dec = ".", row.names = FALSE)
+```
+
+# inserting into the db
+```{r}
+# uncomment this line to insert the samples into rolodex. 
+# BEFORE DOING SO, MAKE SURE YOU HAVE PULLED THE ROLODEX-SAMPLES REPO!!!
+# DON'T FORGET TO COMMIT AND PUSH ONCE INSERTED!!!
+# insertSamples(sampleDescriptionList)
+
+# and disconnecting DB
+dbDisconnect(con)
+```

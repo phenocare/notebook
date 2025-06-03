@@ -9,4 +9,4 @@ Below link explain how to create a new template
 https://bookdown.org/yihui/rmarkdown/template-structure.html
 
 library(usethis)
-use_rmarkdown_template()
+use_rmarkdown_template("name you want")
