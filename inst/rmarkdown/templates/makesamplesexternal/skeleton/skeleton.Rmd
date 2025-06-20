@@ -54,18 +54,23 @@ cohortName <- input(con,
 
 
 ```{r}
-# select the dataPath pattern 
-manifest <- rldx::rldx_get(service = Sys.getenv("ROLDX_URL"),
-               route = "searchDataPath",
-               request = "?pattern=AYGUL_STOOL_POLAR")
-manifest <- manifest$content$ids
-setDT(manifest)
+# # select the dataPath pattern 
+# # Although this method works it doesn't include the dPath that we like for 
+# # ICL data.
 
+# manifest <- rldx::rldx_get(service = Sys.getenv("ROLDX_URL"),
+#                route = "searchDataPath",
+#                request = "?pattern=AYGUL_STOOL_POLAR")
+# manifest <- manifest$content$ids
+# setDT(manifest)
 # manifest <- manifest[grep("STOOL",dataPath),,]
-
 # rldx::rldx_get(service = Sys.getenv("ROLDX_URL"),
 #                route = "lastSampleName",
 #                request = "")
+
+# # for ICL data prefer using this method
+# # run this command on limsms to get a tsv file and import it here
+# find /exports/nmr/EXTERNAL/tmp/bioGUNE_500_general_population/ -type f -name acqus -exec sh -c 'importMissingFolder {} | jq "[.[]] | @tsv"' \; > out.tsv
 ```
 
 
