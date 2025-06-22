@@ -234,6 +234,11 @@ write.table(sampleDescriptionList,
 # DON'T FORGET TO COMMIT AND PUSH ONCE INSERTED!!!
 # insertSamples(sampleDescriptionList)
 
+print("don't forget to add batch in plt/samples/migrations/097.do.sql and runs in 098.do.sql")
+# don't forget to add a batch and run in batch plt/samples/migrations/097.do.sql and 098.do.sql
+paste0("INSERT INTO batches VALUES (null, '", EXNbXX, "', ", cohortId,", '{}', '", cohortName, "')")
+
+
 # and disconnecting DB
 dbDisconnect(con)
 ```
