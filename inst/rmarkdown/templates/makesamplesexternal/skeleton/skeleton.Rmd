@@ -71,6 +71,9 @@ cohortName <- input(con,
 # # for ICL data prefer using this method
 # # run this command on limsms to get a tsv file and import it here
 # find /exports/nmr/EXTERNAL/tmp/bioGUNE_500_general_population/ -type f -name acqus -exec sh -c 'importMissingFolder {} | jq "[.[]] | @tsv"' \; > out.tsv
+# find /exports/nmr/EXTERNAL/tmp/bioGUNE_500_general_population/ -type f -name acqus -exec sh -c 'importMissingFolder {} | jq "keys | @tsv"' \; -quit > headers.tsv
+# cat headers.tsv out.tsv > importList.tsv
+manifest <- read.table("originalFiles/importList.tsv", header = TRUE, sep = "\t", quote = "", stringsAsFactors = FALSE)
 ```
 
 
