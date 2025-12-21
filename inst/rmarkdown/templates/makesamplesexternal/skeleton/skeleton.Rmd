@@ -1,5 +1,5 @@
 ---
-title: "external - cohortName - sampleMatrixType - comment - v0.2.0"
+title: "external2 - cohortName - sampleMatrixType - comment - v0.2.0"
 author: "Your Name"
 date: "The Date"
 output: 
@@ -34,15 +34,15 @@ options("max.print" = 10000)
 ```{r}
 # Get the name of the project from the database
 con <- openDb()
-project <- input(con, what = "project")
-# should be 34
+# project <- input(con, what = "project")
+# should be 14 or 47
 ```
 
 ```{r}
 # Set project and prefix
-projectName <- project$name
-projectID <- project$projectID
-prefix <- rolProject(projectName)$prefix
+projectName <- "external2"
+projectID <- 47
+prefix <- "EXN"
 ```
 
 ```{r}
@@ -70,10 +70,9 @@ cohortName <- input(con,
 
 # # for ICL data prefer using this method
 # # run this command on limsms to get a tsv file and import it here
-# find /exports/nmr/EXTERNAL/tmp/bioGUNE_500_general_population/ -type f -name acqus -exec sh -c 'importMissingFolder {} | jq "[.[]] | @tsv"' \; > out.tsv
-# find /exports/nmr/EXTERNAL/tmp/bioGUNE_500_general_population/ -type f -name acqus -exec sh -c 'importMissingFolder {} | jq "keys_unsorted | @tsv"' \; -quit > headers.tsv
-# cat headers.tsv out.tsv > importList.tsv
+# scripts/SRV02/scrapeNMRFolders_external.sh 
 manifest <- read.table("originalFiles/importList.tsv", header = TRUE, sep = "\t", quote = "", stringsAsFactors = FALSE)
+setDT(manifest)
 ```
 
 
@@ -148,23 +147,23 @@ manifest[dduplicated(uniquetxt),,]
 # use this for external projects only
 
 # Create a list of columns to exclude (all columns not in your select list)
-cols_to_drop <- c("sampleID", "projectName", "cohortName", "receptionDate",
-                 "sampleMatrixType", "sampleVolume", "tubeLabel", "sourceID",
-                 "sampleTimePoint", "sampleAliquots", "boxName", "boxType",
-                 "tubePosition", "tubeRow", "tubeCol", "collectionTube",
-                 "comments", "UUID")
+# cols_to_drop <- c("sampleID", "projectName", "cohortName", "receptionDate",
+#                  "sampleMatrixType", "sampleVolume", "tubeLabel", "sourceID",
+#                  "sampleTimePoint", "sampleAliquots", "boxName", "boxType",
+#                  "tubePosition", "tubeRow", "tubeCol", "collectionTube",
+#                  "comments", "UUID")
 
 # Get all column names
-all_cols <- names(manifestOriginal)
+# all_cols <- names(manifestOriginal)
 
 # Identify columns to drop
-cols_to_drop <- intersect(all_cols, cols_to_drop)
+# cols_to_drop <- intersect(all_cols, cols_to_drop)
 
 # Create a copy of the data.table for metaComments
 metaComments <- copy(manifestOriginal)
 
 # Drop the columns by reference
-metaComments[, (cols_to_drop) := NULL]
+# metaComments[, (cols_to_drop) := NULL]
 
 # Simple function to clean SQLite/JSON problematic characters
 clean_sqlite_chars <- function(x) {
@@ -224,7 +223,7 @@ checkSamples(sampleDescriptionList)
 txt = manifest$sampleMatrixType[1] # if you really need to identify multiple lists, please use this.
 
 write.table(sampleDescriptionList, 
-            file = paste0("sampleDescriptionList", cleanNames(txt), ".ignore.tsv"), sep = "\t", dec = ".", row.names = FALSE)
+            file = paste0("sampleDescriptionList_", cleanNames(txt), ".ignore.tsv"), sep = "\t", dec = ".", row.names = FALSE)
 ```
 
 # inserting into the db
