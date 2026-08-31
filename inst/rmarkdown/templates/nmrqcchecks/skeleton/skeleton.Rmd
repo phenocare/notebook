@@ -1,0 +1,1361 @@
+---
+title: "(runName) 1H NMR 1D spectra QC Check"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    css: ../makeConfig.css
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+    theme: lumen
+editor_options:
+  chunk_output_type: inline
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE,
+                      warning = FALSE)
+
+library(knitr)
+library(htmlTable)
+library(dplyr)
+library(ggplot2)
+library(fusion)
+## If you do not have fusion run below
+# remotes::install_github("phenological/fusion")
+## @@ Or see https://github.com/phenological/fusion
+## check your package version using
+# packageVersion("fusion")
+## should be >= 1.3.0
+
+library(mva.plots)
+## If you do not have mva.plot run below
+# remotes::install_github("phenological/mva-plots")
+## should be >= 0.0.8
+
+library(nmr.spectra.processing)
+## If you do not have nmr.spectra.processing run below
+# remotes::install_github("phenological/nmr-spectra-processing")
+## should be >= 0.1.6
+
+```
+
+# Load spectra daE
+
+## Step 1: set the file.path
+
+```{r}
+# Navigate yourself to the folder where you store daE file (below is an example)
+
+pathToDaE <- "~/Downloads/ProjectName/cohortName/DataElements/"
+```
+
+## Step 2: load the daE
+```{r}
+# you can check the daE file name in the folder you set in Step 1, and replace "Project_Cohort_Matrix_runName@pulseprogram.daE" with your daE file name
+dir(pathToDaE, pattern = ".daE")
+
+### Lets say your Plasma 1D NMR spectra daE is called "Project_Cohort_Matrix_runName@pulseprogram.daE" then
+da <- local(get(load(
+  file.path(pathToDaE, "Project_Cohort_Matrix_runName@pulseprogram.daE")
+)))
+
+```
+
+## Step 3: extract information from the daE
+
+da\@.Data: spectra data
+
+da\@obsDescr: A list of specta information
+
+-   info: You should find the dataPath, sampleID, sampleType and more
+
+-   proc: (SF: spectra frequency. PHC0: zero-order phase. PHC1: 1st
+    order phase. SR: Spectra Reference)
+
+-   params: all the acqus information
+
+-   test_info_value: QC report in details
+
+-   test_tests_value: QC experiment performance results
+
+-   test_tests_comment
+
+da\@varName: column name of the da\@.Data (ppm in this daE)
+
+```{r}
+X <- da@.Data
+ppm <- as.numeric(da@varName)
+Anno <- da@obsDescr$info
+Anno$IVDR <- sapply(strsplit(Anno$dataPath, "/"), "[", 4) # extract instrument information
+Anno$plateID <- sapply(strsplit(sapply(strsplit(Anno$dataPath, "/"), "[", 6), "_"), "[", 6) # extract plateID information
+qc_info_values <- da@obsDescr$test_infos_value
+qc_test_values <- da@obsDescr$test_tests_value
+qc_test_comments <- da@obsDescr$test_tests_comment
+
+# if you put ppm to the column name of X, also sampleID to the row names would help you with visualization using mva.plot function called matspec()
+rownames(X) <- Anno$sampleID
+colnames(X) <- ppm
+
+```
+
+# Individual Sample check
+## Check TSP peak
+### Use Bruker QC check report TSP region integrals (-0.5 ~ 0.5 ppm) in mmol/L to be in 28.1 ~ 43.7
+```{r}
+
+if (any(qc_test_comments$`tsp-region-integral` == "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`tsp-region-integral` == "not passed")
+} else {
+
+  cat("All samples passed TSP region integral QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed TSP region integral QC check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(-0.05, 0.05),
+    title = "TSP region integral QC check",
+    optns = list(fator = qc_test_comments$`tsp-region-integral`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+  
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_tsp <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+  rm(choice)
+}
+
+# clean the environment
+rm(idx)
+
+```
+
+### Alternative Option: Visual inspection of TSP spectral region
+
+You can simply visualize the TSP region of all spectra, then identify any odd spectra and remove them from the dataset for further analysis.
+
+```{r}
+matspec(X,ppm,roi = c(-0.01,0.01),interactive = F)
+```
+
+## Check LineWidth
+### Use Bruker QC check report for LineWidth in Hz to be in 0.5 ~ 1.5 Hz
+
+```{r}
+
+if (any(qc_test_comments$`linewidth-in-hz` == "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`linewidth-in-hz` == "not passed")
+} else {
+
+  cat("All samples passed LineWidth QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed LineWidth check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(-0.05, 0.05),
+    title = "LineWidth QC check",
+    optns = list(fator = qc_test_comments$`linewidth-in-hz`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+  
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_linewidth <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+ rm(choice)
+}
+
+# clean the environment
+rm(idx)
+
+```
+
+## Check Residual Water
+### Use Bruker QC check report for Residual Water signal in mmol/L to be in below 30.0 mmol/L
+
+```{r}
+
+if (any(qc_test_comments$`residual-water-signal-in-mmol-l` == "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`residual-water-signal-in-mmol-l` == "not passed")
+} else {
+
+  cat("All samples passed Residual Water QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed Residual Water check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(4.6, 4.8),
+    title = "Residual Water QC check",
+    optns = list(fator = qc_test_comments$`residual-water-signal-in-mmol-l`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+  
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_residualwater <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+  rm(choice)
+}
+
+# clean the environment
+rm(idx)
+
+```
+
+### Alternative Option: Visual inspection of Water Suppression spectral region
+
+You can simply visualize the Water Suppression region of all spectra, then identify any odd spectra and remove them from the dataset for further analysis.
+
+```{r}
+matspec(X,ppm,roi = c(4.6,4.8),interactive = F)
+```
+
+## Check Baseline
+### Use Bruker QC check report for Baseline in mmol/L/Hz to be less than 0.002
+```{r}
+
+if (any(qc_test_comments$`baseline-in-mmol-l-hz` == "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`baseline-in-mmol-l-hz` == "not passed")
+} else {
+
+  cat("All samples passed BaseLine QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed BaseLine check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(9.0, 10.0),
+    title = "BaseLine QC check",
+    optns = list(fator = qc_test_comments$`baseline-in-mmol-l-hz`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+  
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_baseline <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+  rm(choice)
+}
+
+ 
+# clean the environment
+rm(idx)
+
+```
+
+## Check Alanine ppm shift
+### Use Bruker QC check report for Alanine ppm shift delta from 1.48 ppm in ppm (-0.0280 ~ -0.0140 ppm)
+```{r}
+
+if (any(qc_test_comments$`alanine-ppm-shift-delta-from-1-48ppm-in-ppm` == "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`alanine-ppm-shift-delta-from-1-48ppm-in-ppm` == "not passed")
+} else {
+
+  cat("All samples passed Alanine peak shift QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed BaseLine check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(1.46, 1.53),
+    title = "Alanine Peak Shift QC check",
+    optns = list(fator = qc_test_comments$`alanine-ppm-shift-delta-from-1-48ppm-in-ppm`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+  
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_alanine <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+  rm(choice)
+}
+
+# clean the environment
+rm(idx)
+
+```
+
+## Matrix Integrity QC check
+### Acetic Acid
+- Concentration LOD is 0.01 mmol/L and upper limit is 0.10 mmol/L
+
+- Chemical shift to be found between 1.916 and 1.918 ppm
+
+```{r}
+
+if (any(qc_test_comments$`acetic-acid` == "not passed"|qc_test_comments$`acetic-acid#1` == "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`acetic-acid` == "not passed"|qc_test_comments$`acetic-acid#1` == "not passed")
+} else {
+
+  cat("All samples passed Acetic Acid QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed Acetic Acid QC check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(1.915, 1.92),
+    title = "Acetic Acid QC check",
+    optns = list(Concentration = qc_test_comments$`acetic-acid`,
+                 ChemicalShift = qc_test_comments$`acetic-acid#1`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_acetic <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+
+  rm(choice)
+}
+
+
+# clean the environment
+rm(idx)
+
+```
+
+### Citric Acid-B
+- Concentration LOD is 0.03 mmol/L and upper limit is 3.00 mmol/L
+
+- Chemical shift to be found between 2.657 and 2.659 ppm
+
+```{r}
+
+if (any(qc_test_comments$`citric-acid-b#1` == "not passed" | qc_test_comments$`citric-acid-b#2` == "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`citric-acid-b#1` == "not passed" | qc_test_comments$`citric-acid-b#2` == "not passed")
+} else {
+
+  cat("All samples passed Citric Acid-B QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed Citric Acid-B QC check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(2.655, 2.66),
+    title = "Citric Acid-B QC check",
+    optns = list(Concentration = qc_test_comments$`citric-acid-b#1`,
+                 ChemicalShift = qc_test_comments$`citric-acid-b#2`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_citricacid <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+
+  rm(choice)
+}
+
+
+# clean the environment
+rm(idx)
+
+```
+
+### Formic Acid
+- Concentration LOD is 0.02 mmol/L and upper limit is 0.20 mmol/L
+
+- Chemical shift to be found between 8.458 and 8.46 ppm
+
+```{r}
+
+if (any(qc_test_comments$`formic-acid` == "not passed" | qc_test_comments$`formic-acid#1` == "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`formic-acid` == "not passed" | qc_test_comments$`formic-acid#1` == "not passed")
+} else {
+
+  cat("All samples passed Formic Acid QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed Formic Acid QC check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(8.456, 8.46),
+    title = "Formic Acid QC check",
+    optns = list(Concentration = qc_test_comments$`formic-acid`,
+                 ChemicalShift = qc_test_comments$`formic-acid#1`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+}
+
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_formicacid <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+
+# clean the environment
+rm(idx,choice)
+
+```
+
+### D-Glucose alpha
+- Concentration LOD is 0.20 mmol/L and upper limit is 3.20 mmol/L
+
+- Chemical shift to be found between 5.237 and 5.239 ppm
+
+```{r}
+
+if (any(qc_test_comments$`d-glucose-alpha` == "not passed" | qc_test_comments$`d-glucose-alpha#1` == "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`d-glucose-alpha` == "not passed" | qc_test_comments$`d-glucose-alpha#1` == "not passed")
+} else {
+
+  cat("All samples passed D-Glucose alpha QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed D-Glucose alpha QC check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(5.23, 5.24),
+    title = "D-Glucose alpha QC check",
+    optns = list(Concentration = qc_test_comments$`d-glucose-alpha`,
+                 ChemicalShift = qc_test_comments$`d-glucose-alpha#1`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_glucose <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+
+
+  rm(choice)
+}
+
+# clean the environment
+rm(idx)
+
+```
+
+### Lactic Acid
+- Concentration LOD is 0.03 mmol/L and upper limit is 8.10 mmol/L
+
+- Chemical shift to be found between 1.327 and 1.329 ppm
+
+```{r}
+
+if (any(qc_test_comments$`lactic-acid` == "not passed" | qc_test_comments$`lactic-acid#1` == "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`lactic-acid` == "not passed" | qc_test_comments$`lactic-acid#1` == "not passed")
+} else {
+
+  cat("All samples passed Lactic Acid QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed Lactic Acid QC check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(1.32, 1.33),
+    title = "Lactic Acid QC check",
+    optns = list(Concentration = qc_test_comments$`lactic-acid`,
+                 ChemicalShift = qc_test_comments$`lactic-acid#1`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_glucose <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+  rm(choice)
+}
+
+# clean the environment
+rm(idx)
+
+```
+
+
+## Matrix Contamination QC check
+
+### Contamination: tert-butanol @ 0.88ppm to be less than 0.015 mmol/L
+```{r}
+
+if (any(qc_test_comments$`tert-butanol-in-mmol-l`== "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`tert-butanol-in-mmol-l`== "not passed")
+} else {
+
+  cat("All samples passed tert-butanol Contamination QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed tert-butanol Contamination QC check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(0.85, 0.9),
+    title = "tert-butanol Contamination QC check",
+    optns = list(Concentration = qc_test_comments$`tert-butanol-in-mmol-l`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_tert_butanol <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+
+  rm(choice)
+}
+
+
+# clean the environment
+rm(idx)
+
+```
+
+### Contamination: @ 1.25 ppm to be less than 0.015 mmol/L
+```{r}
+
+if (any(qc_test_comments$`contamination-1-25ppm-in-mmol-l`== "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`contamination-1-25ppm-in-mmol-l`== "not passed")
+} else {
+
+  cat("All samples passed 1.25 ppm Contamination QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed 1.25 ppm Contamination QC check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(1.245, 1.255),
+    title = "1.25 ppm Contamination QC check",
+    optns = list(Concentration = qc_test_comments$`contamination-1-25ppm-in-mmol-l`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_125ppm <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+
+  rm(choice)
+}
+
+
+# clean the environment
+rm(idx)
+
+```
+
+### Contamination: isopropanol to be less than 0.020 mmol/L
+```{r}
+
+if (any(qc_test_comments$`isopropanol-in-mmol-l`== "not passed")) {
+
+  # Identify failed samples
+  idx <- which(qc_test_comments$`isopropanol-in-mmol-l`== "not passed")
+} else {
+
+  cat("All samples passed isopropanol Contamination QC check.\n")
+
+}
+
+  # --------------------------------------------------
+  # Display A table of failed samples here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed samples
+  cat("Samples that failed isopropanol Contamination QC check:\n\n")
+  print(
+    Anno[idx, c("dataPath", "sampleID", "sampleType")]
+  )
+}
+
+  # --------------------------------------------------
+  # Display QC plot here
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Show failed spectra
+  specOverlay(
+    X,
+    ppm,
+    roi = c(1.0, 1.2),
+    title = "isopropanol Contamination QC check",
+    optns = list(Concentration = qc_test_comments$`isopropanol-in-mmol-l`)
+  )
+}
+
+  # --------------------------------------------------
+  # Decision: Ask user whether to remove failed samples
+  # MASK THIS SECTION IF YOU WANT TO AUTOMATE THE REMOVAL OF FAILED SAMPLES
+  # Choice: TRUE = remove failed samples, FALSE = keep failed samples
+  # # choice<-TRUE OR FALSE
+  # --------------------------------------------------
+
+if(exists("idx")){
+  # Ask user whether to remove failed samples
+  choices <- c(
+    "Yes, remove these samples from the dataset for further analysis",
+    "No, keep these samples in the dataset for further analysis"
+  )
+
+  choice <- menu(choices, title = "Select") == 1
+
+  # --------------------------------------------------
+  # Remove failed samples if user chooses to do so
+  # --------------------------------------------------
+
+  if (choice) {
+
+    cat("\nThese samples will be removed from the dataset for further analysis.\n")
+
+    removed_isopropanol <- Anno[idx, "dataPath"]
+
+    Anno <- Anno[-idx, ]
+    X <- X[-idx, ]
+    qc_info_values <- qc_info_values[-idx, ]
+    qc_test_values <- qc_test_values[-idx, ]
+    qc_test_comments <- qc_test_comments[-idx, ]
+
+  } else {
+
+    cat("\nThese samples will be kept in the dataset for further analysis.\n")
+  }
+
+  rm(choice)
+}
+
+
+# clean the environment
+rm(idx)
+
+```
+
+# Cohort Run check
+
+By now, we have checked all the possible QC issues for each sample. Now we will check the overall cohort run QC issues, which are related to the overall cohort run, not individual samples.
+
+## Post processing
+
+### Step 1: Calibrate spectra to alanine
+
+check the alanine spectra region (1.45 \~ 1.52 ppm) by plotting the regions using matspec()
+
+<https://github.com/phenological/mva-plots/blob/main/R/matspec.R>
+
+```{r}
+matspec(X,ppm,roi = c(1.45,1.52),interactive = F)
+```
+
+Calibrate to Alanine doublet using calibrateSpectra()
+
+<https://github.com/phenological/nmr-spectra-processing/blob/main/R/calibrateSpectra.R>
+
+```{r}
+X_cal<-calibrateSpectra(ppm = ppm,Y = X,ref = c("alanine"),maxShift = 1.5,rOref = c(1.45,1.53),cshift = 1.48)
+colnames(X_cal)<-ppm
+
+matspec(X_cal,ppm,roi = c(1.45,1.52),interactive = F)
+
+```
+
+### Step 2: Remove selected region of the spectra
+
+Remove the following regions of the spectra:
+
+- 0.5 ppm and below (TSP region)
+
+- 4.7 to 5.0 ppm (Water suppression region)
+
+- 9.5 ppm and above (Baseline region)
+
+```{r}
+
+idx<-c(which(ppm<=0.5),which(ppm>=4.7 & ppm<=5.0),which(ppm>=9.5))
+
+X<-X_cal[,-idx]
+ppm<-ppm[-idx]
+
+rm(idx,X_cal)
+```
+
+### Step 3: Apply baseline correction using baselineCorrection()
+
+<https://github.com/phenological/nmr-spectra-processing/blob/main/R/baselineCorrection.R>
+
+```{r}
+X<-baselineCorrection(X)
+
+matspec(X,ppm,roi = c(1.45,1.52),interactive = F,main = "After baseline correction")
+```
+
+## Spectra check with PCA
+
+You should see the "ltr" and "sltr" to be cluster tightly.
+
+If not, look at the spectra and find out why (could it be failed water
+suppression?)
+
+You can also check if there are any outliers. Find out which spectra it
+is, plot some spectra to find the reason why.
+
+```{r}
+mod<-PCA(X,rank = 2)
+
+# To visualize the PCA scores, you can use the following code:
+
+## color the PCA scores by sample type
+plotScores(mod,optns = list(color = Anno$sampleType,
+                            colorTitle = "sampleType",
+                            plotTitle = "PCA Scores colored by sample type"))
+
+## color the PCA scores by IVDr to check instrumental differences
+plotScores(mod,optns = list(color = Anno$IVDR,
+                            colorTitle = "sampleType",
+                            plotTitle = "PCA Scores colored by Instrument"))
+
+## color the PCA scores by sample type and shape by plateID
+plotScores(mod,optns = list(color = Anno$sampleType,
+                            shape = Anno$plateID,
+                            extra = ggplot2::scale_shape_manual(values = seq(1, length(unique(Anno$plateID)),1)),
+                            colorTitle = "sampleType",
+                            shapeTitle = "plateID",
+                            plotTitle = "PCA Scores colored by Instrument"))
+
+
+# To check the loadings of the PCA model, you can use the following code:
+PlotLoadSpec(mod,PC= 1,roi = c(0.5,4.5))
+PlotLoadSpec(mod,PC= 1,roi = c(5.0,9.5))
+
+```
